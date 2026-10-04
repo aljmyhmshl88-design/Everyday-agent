@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import Logo from "./Logo";
 import { Icon } from "./ui";
 
 export interface AuthUser {
@@ -60,7 +61,14 @@ export function AuthGate({ children, backdrop }: { children: ReactNode; backdrop
     if (status.s === "authed" && document.referrer.includes("accounts.google.com")) setNotice(`Signed in as ${status.user.email}`);
   }, [status]);
 
-  if (status.s === "loading") return null;
+  if (status.s === "loading")
+    return (
+      <div className="fixed inset-0 z-10 flex items-center justify-center">
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.9 }}>
+          <Logo tagline size="lg" />
+        </motion.div>
+      </div>
+    );
   if (status.s === "anon") return <LoginScreen backdrop={backdrop} onAuthed={onAuthed} initialError={urlError} />;
   return (
     <Ctx.Provider value={{ user: status.user, signOut }}>
@@ -121,13 +129,7 @@ function LoginScreen({ backdrop, onAuthed, initialError }: { backdrop: ReactNode
       {backdrop}
       <div className="fixed inset-0 z-10 flex items-center justify-center p-4">
         <motion.div initial={{ opacity: 0, y: 24, filter: "blur(8px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} transition={{ duration: 0.8, ease: [0.2, 0.8, 0.2, 1] }} className="glass w-full max-w-[420px] rounded-[28px] p-7 sm:p-9">
-          <div className="mb-6 flex items-center gap-2.5">
-            <div className="relative flex h-8 w-8 items-center justify-center">
-              <span className="absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(196,155,255,0.55),transparent_70%)]" />
-              <span className="relative h-1.5 w-1.5 rounded-full bg-white shadow-[0_0_12px_4px_rgba(220,210,255,0.8)]" />
-            </div>
-            <span className="text-[15px] font-semibold tracking-tight">Everyday</span>
-          </div>
+          <div className="mb-7"><Logo tagline /></div>
           <h1 className="text-gradient text-[28px] font-semibold leading-tight tracking-[-0.03em]">{mode === "signup" ? "Meet your team." : "Welcome back."}</h1>
           <p className="mt-2 text-[14px] leading-relaxed text-mist">{mode === "signup" ? "Create your account with just an email and password. We'll send you a welcome email." : "Sign in to pick up where your agents left off."}</p>
 

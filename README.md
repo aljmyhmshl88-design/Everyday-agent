@@ -1,4 +1,4 @@
-# Everyday — AI agent workforce (frontend MVP)
+# Orqivio AI — Build your agent team.
 
 Next.js + TypeScript + Tailwind v4 + Framer Motion. A cinematic chat-first UI where every agent is a star in a living, canvas-rendered constellation. All work is simulated locally (no backend).
 

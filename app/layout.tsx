@@ -4,8 +4,8 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Everyday — your AI workforce",
-  description: "Ask your team of AI agents to do anything.",
+  title: "Orqivio AI",
+  description: "Build your agent team.",
 };
 
 export const viewport: Viewport = { themeColor: "#04060d", width: "device-width", initialScale: 1 };

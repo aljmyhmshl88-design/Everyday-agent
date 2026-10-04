@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useStore } from "@/lib/store";
 import type { View } from "@/lib/types";
 import { useAuth } from "./Auth";
+import { LogoMark, Wordmark } from "./Logo";
 import { Icon } from "./ui";
 
 const ITEMS: { id: View; label: string; icon: "chat" | "team" | "tasks" | "activity" }[] = [
@@ -21,14 +22,11 @@ export default function Nav() {
 
   return (
     <header className="pointer-events-none fixed inset-x-0 top-0 z-30 flex items-center justify-between gap-3 px-4 py-4 sm:px-6">
-      <div className="pointer-events-auto flex items-center gap-2.5">
-        <div className="relative flex h-8 w-8 items-center justify-center">
-          <span className="absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(196,155,255,0.55),transparent_70%)]" />
-          <span className="relative h-1.5 w-1.5 rounded-full bg-white shadow-[0_0_12px_4px_rgba(220,210,255,0.8)]" />
-        </div>
-        <div className="hidden leading-none sm:block">
-          <div className="text-[15px] font-semibold tracking-tight">Everyday</div>
-          <div className="mt-1 text-[10.5px] tracking-wide text-haze">
+      <div className="pointer-events-auto flex items-center gap-3 text-white">
+        <LogoMark className="h-8 w-8 shrink-0" />
+        <div className="hidden sm:block">
+          <Wordmark className="text-[18px]" />
+          <div className="mt-1.5 text-[10.5px] tracking-wide text-haze">
             {working} active{state.ai ? <span className="text-[#6ff0c6]"> · Claude live</span> : null}{attention ? <span className="text-[#ffc86e]"> · {attention} needs you</span> : null}
           </div>
         </div>
