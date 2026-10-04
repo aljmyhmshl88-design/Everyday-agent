@@ -6,7 +6,7 @@ import type { State } from "./types";
 
 const Ctx = createContext<{ state: State; dispatch: Dispatch<Action>; stateRef: { current: State } } | null>(null);
 
-export function StoreProvider({ children }: { children: ReactNode }) {
+export function StoreProvider({ children, persist = true }: { children: ReactNode; persist?: boolean }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -16,6 +16,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // load persisted state once; fall back to the seeded demo team if the API is unavailable
   useEffect(() => {
+    if (!persist) return;
     let cancelled = false;
     fetch("/api/state")
       .then((r) => (r.ok ? r.json() : null))
@@ -30,7 +31,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [persist]);
 
   useEffect(() => {
     const id = setInterval(() => dispatch({ type: "TICK", now: Date.now() }), 800);
@@ -39,6 +40,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // autosave: every few seconds, only when something changed
   useEffect(() => {
+    if (!persist) return;
     const body = () => {
       const s = stateRef.current;
       return JSON.stringify({ agents: s.agents, projects: s.projects, tasks: Object.values(s.tasks), activity: s.activity, messages: s.messages.filter((m) => !m.typing) });
@@ -58,7 +60,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       clearInterval(id);
       window.removeEventListener("pagehide", onHide);
     };
-  }, []);
+  }, [persist]);
 
   return <Ctx.Provider value={{ state, dispatch, stateRef }}>{children}</Ctx.Provider>;
 }

@@ -3,6 +3,7 @@
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { StoreProvider, useStore } from "@/lib/store";
+import { AuthGate } from "./Auth";
 import AgentPanel from "./AgentPanel";
 import Chat from "./Chat";
 import CommandHud from "./CommandHud";
@@ -46,9 +47,18 @@ export default function Shell() {
     <main className="space-bg fixed inset-0">
       {mounted && (
         <MotionConfig reducedMotion="user">
-          <StoreProvider>
-            <Stage />
-          </StoreProvider>
+          <AuthGate
+            backdrop={
+              <StoreProvider persist={false}>
+                <Constellation />
+                <div className="vignette pointer-events-none fixed inset-0 z-[1]" />
+              </StoreProvider>
+            }
+          >
+            <StoreProvider>
+              <Stage />
+            </StoreProvider>
+          </AuthGate>
         </MotionConfig>
       )}
     </main>

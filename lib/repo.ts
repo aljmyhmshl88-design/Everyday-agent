@@ -10,39 +10,40 @@ export interface Snapshot {
   messages: ChatMessage[];
 }
 
+const TABLES = ["agents", "projects", "tasks", "activity", "messages"];
 const parse = <T>(rows: Record<string, unknown>[]) => rows.map((r) => JSON.parse(r.data as string) as T);
 
-export function isEmpty(): boolean {
-  return (getDb().prepare("SELECT COUNT(*) AS n FROM agents").get()?.n as number) === 0;
+export function isEmpty(userId: string): boolean {
+  return (getDb().prepare("SELECT COUNT(*) AS n FROM agents WHERE user_id = ?").get(userId)?.n as number) === 0;
 }
 
-export function loadSnapshot(): Snapshot {
+export function loadSnapshot(userId: string): Snapshot {
   const db = getDb();
   return {
-    agents: parse<Agent>(db.prepare("SELECT data FROM agents ORDER BY position").all()),
-    projects: parse<Project>(db.prepare("SELECT data FROM projects ORDER BY created_at").all()),
-    tasks: parse<Task>(db.prepare("SELECT data FROM tasks").all()),
-    activity: parse<Activity>(db.prepare("SELECT data FROM activity ORDER BY at DESC LIMIT 200").all()),
-    messages: parse<ChatMessage>(db.prepare("SELECT data FROM messages ORDER BY at").all()),
+    agents: parse<Agent>(db.prepare("SELECT data FROM agents WHERE user_id = ? ORDER BY position").all(userId)),
+    projects: parse<Project>(db.prepare("SELECT data FROM projects WHERE user_id = ? ORDER BY created_at").all(userId)),
+    tasks: parse<Task>(db.prepare("SELECT data FROM tasks WHERE user_id = ?").all(userId)),
+    activity: parse<Activity>(db.prepare("SELECT data FROM activity WHERE user_id = ? ORDER BY at DESC LIMIT 200").all(userId)),
+    messages: parse<ChatMessage>(db.prepare("SELECT data FROM messages WHERE user_id = ? ORDER BY at").all(userId)),
   };
 }
 
 /** Replace the stored snapshot atomically. */
-export function saveSnapshot(s: Snapshot): void {
+export function saveSnapshot(userId: string, s: Snapshot): void {
   const db = getDb();
   db.exec("BEGIN");
   try {
-    for (const t of ["agents", "projects", "tasks", "activity", "messages"]) db.exec(`DELETE FROM ${t}`);
-    const insAgent = db.prepare("INSERT INTO agents (id, position, name, role, custom, data) VALUES (?, ?, ?, ?, ?, ?)");
-    s.agents.forEach((a, i) => insAgent.run(a.id, i, a.name, a.role, a.custom ? 1 : 0, JSON.stringify(a)));
-    const insProject = db.prepare("INSERT INTO projects (id, title, created_at, done_at, background, data) VALUES (?, ?, ?, ?, ?, ?)");
-    for (const p of s.projects) insProject.run(p.id, p.title, p.createdAt, p.doneAt ?? null, p.background ? 1 : 0, JSON.stringify(p));
-    const insTask = db.prepare("INSERT INTO tasks (id, project_id, agent_id, status, progress, data) VALUES (?, ?, ?, ?, ?, ?)");
-    for (const t of s.tasks) insTask.run(t.id, t.projectId, t.agentId, t.status, t.progress, JSON.stringify(t));
-    const insAct = db.prepare("INSERT INTO activity (id, at, agent_id, kind, data) VALUES (?, ?, ?, ?, ?)");
-    for (const a of s.activity) insAct.run(a.id, a.at, a.agentId, a.kind, JSON.stringify(a));
-    const insMsg = db.prepare("INSERT INTO messages (id, at, role, data) VALUES (?, ?, ?, ?)");
-    for (const m of s.messages) insMsg.run(m.id, m.at, m.role, JSON.stringify(m));
+    for (const t of TABLES) db.prepare(`DELETE FROM ${t} WHERE user_id = ?`).run(userId);
+    const insAgent = db.prepare("INSERT INTO agents (user_id, id, position, name, role, custom, data) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    s.agents.forEach((a, i) => insAgent.run(userId, a.id, i, a.name, a.role, a.custom ? 1 : 0, JSON.stringify(a)));
+    const insProject = db.prepare("INSERT INTO projects (user_id, id, title, created_at, done_at, background, data) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    for (const p of s.projects) insProject.run(userId, p.id, p.title, p.createdAt, p.doneAt ?? null, p.background ? 1 : 0, JSON.stringify(p));
+    const insTask = db.prepare("INSERT INTO tasks (user_id, id, project_id, agent_id, status, progress, data) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    for (const t of s.tasks) insTask.run(userId, t.id, t.projectId, t.agentId, t.status, t.progress, JSON.stringify(t));
+    const insAct = db.prepare("INSERT INTO activity (user_id, id, at, agent_id, kind, data) VALUES (?, ?, ?, ?, ?, ?)");
+    for (const a of s.activity) insAct.run(userId, a.id, a.at, a.agentId, a.kind, JSON.stringify(a));
+    const insMsg = db.prepare("INSERT INTO messages (user_id, id, at, role, data) VALUES (?, ?, ?, ?, ?)");
+    for (const m of s.messages) insMsg.run(userId, m.id, m.at, m.role, JSON.stringify(m));
     db.exec("COMMIT");
   } catch (e) {
     db.exec("ROLLBACK");
@@ -50,9 +51,9 @@ export function saveSnapshot(s: Snapshot): void {
   }
 }
 
-export function resetAll(): void {
+export function resetAll(userId: string): void {
   const db = getDb();
-  for (const t of ["agents", "projects", "tasks", "activity", "messages"]) db.exec(`DELETE FROM ${t}`);
+  for (const t of TABLES) db.prepare(`DELETE FROM ${t} WHERE user_id = ?`).run(userId);
 }
 
 /** Light validation so a bad client cannot write junk into the database. */

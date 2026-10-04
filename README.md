@@ -18,9 +18,19 @@ Next.js route handlers + SQLite via Node's built-in `node:sqlite` (no extra depe
 
 - `lib/db.ts` — opens `data/everyday.db` (override with `DATABASE_PATH`), creates the schema (agents, projects, tasks, activity, messages)
 - `lib/repo.ts` — load / atomically save / reset the snapshot, with input validation
-- `GET /api/state` — stored snapshot (or `{ empty: true }` on first run)
+- `GET /api/state` — the signed-in user's stored snapshot (or `{ empty: true }` on first run). All state routes require a session (401 otherwise)
 - `POST /api/state` — replace the stored snapshot (the client autosaves every 4s when something changed, and on page hide)
 - `DELETE /api/state` — wipe the database; reload to re-seed the demo team
 - `GET /api/health` — database check
 
 On load the client hydrates from the API; if the API is unreachable it falls back to the in-memory demo, so the UI never breaks.
+
+## Accounts & login
+
+Copy `.env.example` to `.env.local` and fill in what you need.
+
+- **Email + password:** `POST /api/auth/signup` and `/api/auth/login`. Passwords are hashed with scrypt, sessions are random tokens stored hashed in SQLite and sent as an `HttpOnly` `SameSite=Lax` cookie (30 days). Login is rate limited, and JSON-only POSTs block CSRF.
+- **Welcome email:** sent on signup (and on first Google sign-in). Set `RESEND_API_KEY` + `MAIL_FROM` to deliver real email; without them it is logged and saved in the `outbox` table.
+- **Continue with Google:** real OAuth (authorization code flow with a state check). Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `APP_URL`, and add `APP_URL/api/auth/google/callback` as an authorized redirect URI. The button appears only when configured.
+- **Per-user data:** every table is keyed by user, so each account has its own agents, tasks and chat.
+- `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/config`

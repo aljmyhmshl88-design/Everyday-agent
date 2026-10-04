@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { useStore } from "@/lib/store";
 import type { View } from "@/lib/types";
+import { useAuth } from "./Auth";
 import { Icon } from "./ui";
 
 const ITEMS: { id: View; label: string; icon: "chat" | "team" | "tasks" | "activity" }[] = [
@@ -14,6 +15,7 @@ const ITEMS: { id: View; label: string; icon: "chat" | "team" | "tasks" | "activ
 
 export default function Nav() {
   const { state, dispatch } = useStore();
+  const auth = useAuth();
   const working = state.agents.filter((a) => ["working", "thinking"].includes(a.status)).length;
   const attention = state.agents.filter((a) => a.status === "needs-input").length;
 
@@ -64,6 +66,7 @@ export default function Nav() {
         </button>
       </nav>
 
+      <div className="pointer-events-auto flex items-center gap-2">
       <button
         onClick={() => dispatch({ type: "COMMAND" })}
         className={`glass pointer-events-auto flex items-center gap-2 rounded-full px-3.5 py-2 text-[13px] transition ${state.commandCenter ? "text-white shadow-[0_0_30px_-4px_rgba(196,155,255,0.6)]" : "text-mist hover:text-white"}`}
@@ -72,6 +75,13 @@ export default function Nav() {
         <Icon name="orbit" className="h-4 w-4" />
         <span className="hidden md:inline">{state.commandCenter ? "Exit map" : "Command Center"}</span>
       </button>
+      {auth && (
+        <button onClick={auth.signOut} title={`Signed in as ${auth.user.email}. Click to sign out.`} className="glass group flex h-9 items-center gap-2 rounded-full pl-1 pr-3 text-[12.5px] text-mist transition hover:text-white">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-[12px] font-medium uppercase text-white">{(auth.user.name || auth.user.email)[0]}</span>
+          <span className="hidden lg:inline">Sign out</span>
+        </button>
+      )}
+      </div>
     </header>
   );
 }
