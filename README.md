@@ -44,3 +44,11 @@ Set `ANTHROPIC_API_KEY` in `.env.local` and restart. The nav then shows "Claude 
 - **Talk to any agent:** `POST /api/ai/chat` answers messages sent from an agent's panel, aware of its current task.
 - If a call fails or times out, the app falls back to the simulated result for that step, so nothing gets stuck.
 - Default model `claude-opus-5-5` (override with `AI_MODEL`). Refusal fallbacks are on by default (`AI_FALLBACK=off` disables). Calls are signed-in only and rate limited per user. A project of about 6 tasks makes roughly 7 requests, so watch your usage.
+
+## Deploy (get a public link)
+
+The app needs a Node server and a persistent disk for SQLite, so use a host with disks (Render, Railway, Fly.io), not a serverless host.
+
+**Render:** push this repo to GitHub, then Render dashboard -> New -> Blueprint -> select the repo (uses `render.yaml` and the `Dockerfile`). Fill the environment variables when asked. After the first deploy, set `APP_URL` to your `https://<name>.onrender.com` address and redeploy. For Google sign-in, add `APP_URL/api/auth/google/callback` as an authorized redirect URI.
+
+Anyone with the link can create an account and use your `ANTHROPIC_API_KEY`, so set a spending limit in the Anthropic console.
