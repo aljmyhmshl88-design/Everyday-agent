@@ -1,3 +1,4 @@
+import type { Snapshot } from "./repo";
 import type {
   Activity,
   Agent,
@@ -197,7 +198,8 @@ export type Action =
   | { type: "COMMAND"; on?: boolean }
   | { type: "CREATE_OPEN"; open: boolean }
   | { type: "ADD_AGENT"; agent: Pick<Agent, "name" | "role" | "color" | "description" | "skills"> }
-  | { type: "OPEN_WORK"; agentId: string | null };
+  | { type: "OPEN_WORK"; agentId: string | null }
+  | { type: "HYDRATE"; snapshot: Snapshot };
 
 export function initialState(): State {
   const now = Date.now();
@@ -531,6 +533,21 @@ export function reducer(s: State, a: Action): State {
       return { ...s, createOpen: a.open };
     case "OPEN_WORK":
       return { ...s, workAgentId: a.agentId };
+    case "HYDRATE": {
+      const sn = a.snapshot;
+      if (!sn.agents.length) return s;
+      return {
+        ...s,
+        agents: sn.agents.map((x) => ({ ...x, statusSince: now })),
+        projects: sn.projects,
+        tasks: Object.fromEntries(sn.tasks.map((t) => [t.id, t])),
+        activity: sn.activity,
+        // plans that were still "typing" died with the old session
+        messages: sn.messages.filter((m) => !m.typing),
+        pending: [],
+        transfers: [],
+      };
+    }
     case "ADD_AGENT": {
       const id = a.agent.name.toLowerCase().replace(/[^a-z0-9]/g, "") + "-" + uid().slice(0, 4);
       const agent: Agent = { ...a.agent, id, status: "idle", statusSince: now, bornAt: now, custom: true, thread: [] };

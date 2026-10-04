@@ -11,9 +11,53 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  const hydrated = useRef(false);
+  const lastSaved = useRef("");
+
+  // load persisted state once; fall back to the seeded demo team if the API is unavailable
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/state")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled) return;
+        if (d && !d.empty && d.snapshot) dispatch({ type: "HYDRATE", snapshot: d.snapshot });
+      })
+      .catch(() => {})
+      .finally(() => {
+        hydrated.current = true;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     const id = setInterval(() => dispatch({ type: "TICK", now: Date.now() }), 800);
     return () => clearInterval(id);
+  }, []);
+
+  // autosave: every few seconds, only when something changed
+  useEffect(() => {
+    const body = () => {
+      const s = stateRef.current;
+      return JSON.stringify({ agents: s.agents, projects: s.projects, tasks: Object.values(s.tasks), activity: s.activity, messages: s.messages.filter((m) => !m.typing) });
+    };
+    const save = (beacon = false) => {
+      if (!hydrated.current) return;
+      const b = body();
+      if (b === lastSaved.current) return;
+      lastSaved.current = b;
+      if (beacon && navigator.sendBeacon) navigator.sendBeacon("/api/state", new Blob([b], { type: "application/json" }));
+      else fetch("/api/state", { method: "POST", headers: { "Content-Type": "application/json" }, body: b, keepalive: true }).catch(() => (lastSaved.current = ""));
+    };
+    const id = setInterval(() => save(), 4000);
+    const onHide = () => save(true);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("pagehide", onHide);
+    };
   }, []);
 
   return <Ctx.Provider value={{ state, dispatch, stateRef }}>{children}</Ctx.Provider>;
