@@ -30,7 +30,7 @@ export interface Agent {
   bornAt?: number;
   custom?: boolean;
   /** direct messages between the user and this agent */
-  thread: { id: string; from: "user" | "agent"; text: string; at: number }[];
+  thread: { id: string; from: "user" | "agent"; text: string; at: number; typing?: boolean; requested?: boolean }[];
 }
 
 export interface Task {
@@ -54,6 +54,9 @@ export interface Task {
   errorNote?: string;
   completedAt?: number;
   output?: string;
+  /** work is produced by the real AI (output arrives from the server) */
+  ai?: boolean;
+  requested?: boolean;
 }
 
 export interface Project {
@@ -95,8 +98,18 @@ export interface Transfer {
 
 export interface PendingPlan {
   prompt: string;
+  /** simulated plans materialize at this time; for AI plans it is the timeout that falls back to the simulation */
   readyAt: number;
   messageId: string;
+  ai?: boolean;
+  requested?: boolean;
+}
+
+/** A plan produced by the AI (validated server-side). */
+export interface AiPlan {
+  title: string;
+  reply: string;
+  tasks: { key: string; agentId: string; title: string; steps: string[]; deps: string[]; ask?: { text: string; options: string[] } }[];
 }
 
 export type View = "chat" | "team" | "tasks" | "activity";
@@ -114,4 +127,6 @@ export interface State {
   commandCenter: boolean;
   createOpen: boolean;
   workAgentId: string | null;
+  /** the server has an AI key configured */
+  ai: boolean;
 }

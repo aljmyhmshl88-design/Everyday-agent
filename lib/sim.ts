@@ -1,6 +1,7 @@
 import type { Snapshot } from "./repo";
 import type {
   Activity,
+  AiPlan,
   Agent,
   AgentStatus,
   ChatMessage,
@@ -199,7 +200,15 @@ export type Action =
   | { type: "CREATE_OPEN"; open: boolean }
   | { type: "ADD_AGENT"; agent: Pick<Agent, "name" | "role" | "color" | "description" | "skills"> }
   | { type: "OPEN_WORK"; agentId: string | null }
-  | { type: "HYDRATE"; snapshot: Snapshot };
+  | { type: "HYDRATE"; snapshot: Snapshot }
+  | { type: "AI_STATUS"; enabled: boolean }
+  | { type: "PLAN_REQUESTED"; messageId: string }
+  | { type: "PLAN_READY"; messageId: string; plan: AiPlan }
+  | { type: "PLAN_FAILED"; messageId: string }
+  | { type: "TASK_REQUESTED"; taskId: string }
+  | { type: "TASK_OUTPUT"; taskId: string; output?: string; failed?: boolean }
+  | { type: "AGENT_REQUESTED"; agentId: string; msgId: string }
+  | { type: "AGENT_REPLY"; agentId: string; msgId: string; text?: string; failed?: boolean };
 
 export function initialState(): State {
   const now = Date.now();
@@ -218,6 +227,7 @@ export function initialState(): State {
     commandCenter: false,
     createOpen: false,
     workAgentId: null,
+    ai: false,
   };
 }
 
@@ -360,6 +370,8 @@ function tick(state: State, now: number): State {
         if (t.ticks >= pace + (Math.random() < 0.35 ? 1 : 0)) {
           t.ticks = 0;
           const next = MILESTONES.find((m) => m > t.progress) ?? 100;
+          // real-AI work waits at 70% until the deliverable arrives
+          if (t.ai && !t.output && next >= 100) break;
           t.progress = next;
           const q = t.question;
           if (t.askAt && q && !t.askedAt && t.progress >= t.askAt) {
@@ -373,7 +385,7 @@ function tick(state: State, now: number): State {
             if (fixer && fixer.agentId !== t.agentId) transfers.push({ id: uid(), from: t.agentId, to: fixer.agentId, at: now });
           } else if (t.progress >= 100) {
             const project = s.projects.find((p) => p.id === t.projectId);
-            t = { ...t, status: "complete", completedAt: now, output: outputFor(s.agents.find((a) => a.id === t.agentId), t, project) };
+            t = { ...t, status: "complete", completedAt: now, output: t.output ?? outputFor(s.agents.find((a) => a.id === t.agentId), t, project) };
             activity.push(act(t.agentId, `${nm} completed “${t.title}”`, "complete", now));
           }
         }
@@ -458,7 +470,7 @@ function userMessage(s: State, text: string, now: number): State {
   return {
     ...s,
     messages: [...s.messages, userMsg, { id: typingId, at: now, role: "atlas", text: "", typing: true }],
-    pending: [...s.pending, { prompt: text, readyAt: now + 1700, messageId: typingId }],
+    pending: [...s.pending, s.ai ? { prompt: text, readyAt: now + 90000, messageId: typingId, ai: true } : { prompt: text, readyAt: now + 1700, messageId: typingId }],
     activity: [act("atlas", `New request: “${titleFrom(text)}”`, "user", now), ...s.activity],
   };
 }
@@ -471,7 +483,14 @@ function agentMessage(s: State, agentId: string, text: string, now: number): Sta
     ...st,
     agents: st.agents.map((a) =>
       a.id === agentId
-        ? { ...a, thread: [...a.thread, { id: uid(), from: "user", text, at: now }, { id: uid(), from: "agent", text: reply, at: now + 1 }] }
+        ? {
+            ...a,
+            thread: [
+              ...a.thread,
+              { id: uid(), from: "user", text, at: now },
+              s.ai ? { id: uid(), from: "agent", text: "", at: now + 1, typing: true } : { id: uid(), from: "agent", text: reply, at: now + 1 },
+            ],
+          }
         : a,
     ),
     activity: [act(agentId, `You → ${agent.name}: “${text.length > 60 ? text.slice(0, 58) + "…" : text}”`, "user", now), ...st.activity],
@@ -484,6 +503,7 @@ function agentMessage(s: State, agentId: string, text: string, now: number): Sta
   const { project, tasks } = buildProject(text, titleFrom(text), [
     { key: "x", agentId, title: titleFrom(text), steps: ["Understanding", "Planning", "Executing", "Review"] },
   ], now);
+  if (s.ai) tasks.forEach((x) => (x.ai = true));
   return withUser(
     { ...s, projects: [...s.projects, project], tasks: { ...s.tasks, ...Object.fromEntries(tasks.map((x) => [x.id, x])) } },
     `Starting now. I'll report progress here and in Activity.`,
@@ -504,6 +524,35 @@ function forAgentTasks(s: State, agentId: string, fn: (t: Task) => Task | null, 
   if (!changed) return s;
   const next = { ...s, tasks, activity: [act(agentId, log, "info", now), ...s.activity] };
   return { ...next, agents: deriveStatuses(next, now) };
+}
+
+function materializeAi(s: State, plan: AiPlan, messageId: string, prompt: string, now: number): State {
+  if (!plan.tasks.length) {
+    // conversational answer, no project
+    return { ...s, messages: s.messages.map((m) => (m.id === messageId ? { ...m, typing: false, text: plan.reply } : m)) };
+  }
+  const planTasks: PlanTask[] = plan.tasks.map((t) => ({
+    key: t.key,
+    agentId: t.agentId,
+    title: t.title,
+    steps: t.steps,
+    deps: t.deps,
+    askAt: t.ask ? 45 : undefined,
+    question: t.ask,
+  }));
+  const { project, tasks } = buildProject(prompt, plan.title || titleFrom(prompt), planTasks, now);
+  tasks.forEach((t) => (t.ai = true));
+  return {
+    ...s,
+    projects: [...s.projects, project],
+    tasks: { ...s.tasks, ...Object.fromEntries(tasks.map((t) => [t.id, t])) },
+    messages: s.messages.map((m) => (m.id === messageId ? { ...m, typing: false, projectId: project.id, text: plan.reply } : m)),
+    activity: [act("atlas", `Planned "${project.title}" → ${tasks.length} subtasks`, "info", now), ...s.activity],
+  };
+}
+
+function patchThread(s: State, agentId: string, msgId: string, fn: (m: Agent["thread"][number]) => Agent["thread"][number]): State {
+  return { ...s, agents: s.agents.map((a) => (a.id === agentId ? { ...a, thread: a.thread.map((m) => (m.id === msgId ? fn(m) : m)) } : a)) };
 }
 
 export function reducer(s: State, a: Action): State {
@@ -533,14 +582,45 @@ export function reducer(s: State, a: Action): State {
       return { ...s, createOpen: a.open };
     case "OPEN_WORK":
       return { ...s, workAgentId: a.agentId };
+    case "AI_STATUS":
+      return s.ai === a.enabled ? s : { ...s, ai: a.enabled };
+    case "PLAN_REQUESTED":
+      return { ...s, pending: s.pending.map((p) => (p.messageId === a.messageId ? { ...p, requested: true } : p)) };
+    case "PLAN_READY": {
+      const p = s.pending.find((x) => x.messageId === a.messageId);
+      if (!p) return s; // already fell back to the simulation
+      return materializeAi({ ...s, pending: s.pending.filter((x) => x.messageId !== a.messageId) }, a.plan, a.messageId, p.prompt, now);
+    }
+    case "PLAN_FAILED": {
+      const p = s.pending.find((x) => x.messageId === a.messageId);
+      if (!p) return s;
+      return materialize({ ...s, pending: s.pending.filter((x) => x.messageId !== a.messageId) }, p.prompt, a.messageId, now);
+    }
+    case "TASK_REQUESTED": {
+      const t = s.tasks[a.taskId];
+      return t ? { ...s, tasks: { ...s.tasks, [t.id]: { ...t, requested: true } } } : s;
+    }
+    case "TASK_OUTPUT": {
+      const t = s.tasks[a.taskId];
+      if (!t) return s;
+      const out = a.failed || !a.output
+        ? outputFor(s.agents.find((x) => x.id === t.agentId), t, s.projects.find((p) => p.id === t.projectId)) + "\n\n(The AI was unreachable, so this is a simulated result.)"
+        : a.output;
+      return { ...s, tasks: { ...s.tasks, [t.id]: { ...t, output: out } } };
+    }
+    case "AGENT_REQUESTED":
+      return patchThread(s, a.agentId, a.msgId, (m) => ({ ...m, requested: true }));
+    case "AGENT_REPLY":
+      return patchThread(s, a.agentId, a.msgId, (m) => ({ ...m, typing: false, text: a.failed || !a.text ? "I couldn't reach my AI brain just now, but I've noted your message." : a.text }));
     case "HYDRATE": {
       const sn = a.snapshot;
       if (!sn.agents.length) return s;
       return {
         ...s,
-        agents: sn.agents.map((x) => ({ ...x, statusSince: now })),
+        agents: sn.agents.map((x) => ({ ...x, statusSince: now, thread: x.thread.filter((m) => !m.typing) })),
         projects: sn.projects,
-        tasks: Object.fromEntries(sn.tasks.map((t) => [t.id, t])),
+        // AI work that never delivered gets requested again after a reload
+        tasks: Object.fromEntries(sn.tasks.map((t) => [t.id, t.ai && !t.output ? { ...t, requested: false } : t])),
         activity: sn.activity,
         // plans that were still "typing" died with the old session
         messages: sn.messages.filter((m) => !m.typing),

@@ -29,7 +29,7 @@ export default function Nav() {
         <div className="hidden leading-none sm:block">
           <div className="text-[15px] font-semibold tracking-tight">Everyday</div>
           <div className="mt-1 text-[10.5px] tracking-wide text-haze">
-            {working} active{attention ? <span className="text-[#ffc86e]"> · {attention} needs you</span> : null}
+            {working} active{state.ai ? <span className="text-[#6ff0c6]"> · Claude live</span> : null}{attention ? <span className="text-[#ffc86e]"> · {attention} needs you</span> : null}
           </div>
         </div>
       </div>

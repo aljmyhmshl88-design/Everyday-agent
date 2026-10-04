@@ -34,3 +34,13 @@ Copy `.env.example` to `.env.local` and fill in what you need.
 - **Continue with Google:** real OAuth (authorization code flow with a state check). Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `APP_URL`, and add `APP_URL/api/auth/google/callback` as an authorized redirect URI. The button appears only when configured.
 - **Per-user data:** every table is keyed by user, so each account has its own agents, tasks and chat.
 - `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/config`
+
+## Real AI (Claude)
+
+Set `ANTHROPIC_API_KEY` in `.env.local` and restart. The nav then shows "Claude live". Without a key everything keeps working on the built-in simulation.
+
+- **Atlas plans for real:** `POST /api/ai/plan` turns your message into a project (agents, steps, dependencies, an optional question for you), or just answers when you are only chatting or asking for status.
+- **Agents do the work:** `POST /api/ai/work` runs when a task starts. The agent writes its actual deliverable using what its teammates already produced. The progress ring animates while it works and holds at 70% until the result arrives; read it with "Open Work".
+- **Talk to any agent:** `POST /api/ai/chat` answers messages sent from an agent's panel, aware of its current task.
+- If a call fails or times out, the app falls back to the simulated result for that step, so nothing gets stuck.
+- Default model `claude-opus-5-5` (override with `AI_MODEL`). Refusal fallbacks are on by default (`AI_FALLBACK=off` disables). Calls are signed-in only and rate limited per user. A project of about 6 tasks makes roughly 7 requests, so watch your usage.
